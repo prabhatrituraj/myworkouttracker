@@ -182,8 +182,6 @@
             color: var(--table-head-text);
         }
 
-        .improved { color: var(--accent-2); font-weight: bold; }
-        .not-improved { color: var(--danger); }
         .helper-text { color: var(--muted); font-size: 0.95rem; margin-top: 6px; }
 
         .import-row {
@@ -271,14 +269,14 @@
 
         <div class="charts-grid" style="margin-top: 18px;">
             <div class="chart-wrap">
-                <h3>Volume Over Time</h3>
+                <h3>Volume Over Time by Exercise</h3>
                 <canvas id="volumeChart"></canvas>
-                <div id="volumeChartInfo" class="helper-text">Click a point on the chart to see details.</div>
+                <div class="helper-text">Each line shows the total volume for an exercise across dates.</div>
             </div>
             <div class="chart-wrap">
-                <h3>Exercise Progress</h3>
+                <h3>Maximum Weight per Exercise</h3>
                 <canvas id="progressChart"></canvas>
-                <div id="progressChartInfo" class="helper-text">Click a line point or legend item to explore different exercises.</div>
+                <div class="helper-text">Each line shows the heaviest weight lifted for an exercise across dates.</div>
             </div>
         </div>
     </div>
@@ -392,7 +390,6 @@
         let volumeChart = null;
         let progressChart = null;
         let editingWorkoutIndex = null;
-        let selectedExercisesInProgressChart = new Set();
 
         document.getElementById("date").value = new Date().toISOString().split("T")[0];
         applyTheme();
@@ -645,39 +642,39 @@
             return [...new Set(workouts.map(w => w.date))].sort((a, b) => new Date(a) - new Date(b));
         }
 
-        function buildVolumeByDate() {
-            const dates = getUniqueDatesSorted();
-            return dates.map(date => {
-                return workouts
-                    .filter(w => w.date === date)
-                    .reduce((sum, w) => sum + getExerciseVolume(w), 0);
-            });
+        function getUniqueExercises() {
+            return [...new Set(workouts.map(w => w.exercise))].sort();
         }
 
-        function getExercisesForProgressChart() {
-            const uniqueExercises = [...new Set(workouts.map(w => w.exercise))].sort();
-            if (selectedExercisesInProgressChart.size === 0) {
-                uniqueExercises.slice(0, 6).forEach(e => selectedExercisesInProgressChart.add(e));
-            }
-            return uniqueExercises;
-        }
-
-        function buildExerciseSeries() {
+        function buildSeriesByMetric(metricFn) {
             const dates = getUniqueDatesSorted();
-            const exercises = getExercisesForProgressChart();
+            const exercises = getUniqueExercises();
 
-            return exercises.map((exercise, idx) => ({
+            return { dates, exercises, datasets: exercises.map(exercise => ({
                 label: exercise,
-                data: dates.map(date => {
-                    return workouts
-                        .filter(w => w.exercise === exercise && w.date === date)
-                        .reduce((sum, w) => sum + getExerciseVolume(w), 0);
-                }),
+                data: dates.map(date => metricFn(exercise, date)),
                 borderWidth: 2,
                 tension: 0.35,
                 pointRadius: 3,
                 fill: false
-            }));
+            })) };
+        }
+
+        function buildVolumeSeries() {
+            return buildSeriesByMetric((exercise, date) => {
+                return workouts
+                    .filter(w => w.exercise === exercise && w.date === date)
+                    .reduce((sum, w) => sum + getExerciseVolume(w), 0);
+            });
+        }
+
+        function buildMaxWeightSeries() {
+            return buildSeriesByMetric((exercise, date) => {
+                const weights = workouts
+                    .filter(w => w.exercise === exercise && w.date === date)
+                    .flatMap(w => w.sets.map(s => Number(s.weight) || 0));
+                return weights.length ? Math.max(...weights) : 0;
+            });
         }
 
         function updateCharts() {
@@ -688,10 +685,10 @@
             const gridColor = getComputedStyle(document.body).getPropertyValue("--border").trim();
             const accent = getComputedStyle(document.body).getPropertyValue("--accent").trim();
             const accent2 = getComputedStyle(document.body).getPropertyValue("--accent-2").trim();
+            const palette = [accent, accent2, '#f59e0b', '#a855f7', '#ef4444', '#14b8a6', '#84cc16', '#f97316'];
 
-            const dates = getUniqueDatesSorted();
-            const volumeData = buildVolumeByDate();
-            const exerciseDatasets = buildExerciseSeries();
+            const volumeSeries = buildVolumeSeries();
+            const maxWeightSeries = buildMaxWeightSeries();
 
             if (volumeChart) volumeChart.destroy();
             if (progressChart) progressChart.destroy();
@@ -699,37 +696,19 @@
             volumeChart = new Chart(volumeCtx, {
                 type: 'line',
                 data: {
-                    labels: dates,
-                    datasets: [{
-                        label: 'Total Volume',
-                        data: volumeData,
-                        borderWidth: 2,
-                        tension: 0.35,
-                        pointRadius: 4,
-                        fill: false,
-                        borderColor: accent
-                    }]
+                    labels: volumeSeries.dates,
+                    datasets: volumeSeries.datasets.map((d, i) => ({
+                        ...d,
+                        borderColor: palette[i % palette.length]
+                    }))
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    interaction: { mode: 'nearest', intersect: true },
+                    interaction: { mode: 'nearest', intersect: false },
                     plugins: {
                         legend: { labels: { color: textColor } },
-                        tooltip: {
-                            callbacks: {
-                                afterLabel: function(context) {
-                                    return `Click to inspect: ${context.label}`;
-                                }
-                            }
-                        }
-                    },
-                    onClick: (event, elements, chart) => {
-                        if (!elements.length) return;
-                        const point = elements[0];
-                        const label = chart.data.labels[point.index];
-                        const value = chart.data.datasets[point.datasetIndex].data[point.index];
-                        document.getElementById('volumeChartInfo').innerText = `Date: ${label} | Total Volume: ${value} KG`;
+                        tooltip: { enabled: true }
                     },
                     scales: {
                         x: { ticks: { color: textColor }, grid: { color: gridColor } },
@@ -741,10 +720,10 @@
             progressChart = new Chart(progressCtx, {
                 type: 'line',
                 data: {
-                    labels: dates,
-                    datasets: exerciseDatasets.map((d, i) => ({
+                    labels: maxWeightSeries.dates,
+                    datasets: maxWeightSeries.datasets.map((d, i) => ({
                         ...d,
-                        borderColor: i % 2 === 0 ? accent2 : accent
+                        borderColor: palette[(i + 2) % palette.length]
                     }))
                 },
                 options: {
@@ -752,34 +731,8 @@
                     maintainAspectRatio: false,
                     interaction: { mode: 'nearest', intersect: false },
                     plugins: {
-                        legend: {
-                            labels: { color: textColor },
-                            onClick: (e, legendItem, legend) => {
-                                const index = legendItem.datasetIndex;
-                                const meta = legend.chart.getDatasetMeta(index);
-                                meta.hidden = meta.hidden === null ? !legend.chart.data.datasets[index].hidden : null;
-                                legend.chart.update();
-
-                                const name = legend.chart.data.datasets[index].label;
-                                const info = document.getElementById('progressChartInfo');
-                                info.innerText = `Toggled: ${name}`;
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                afterLabel: function(context) {
-                                    return 'Click legend items to hide/show series.';
-                                }
-                            }
-                        }
-                    },
-                    onClick: (event, elements, chart) => {
-                        if (!elements.length) return;
-                        const point = elements[0];
-                        const label = chart.data.labels[point.index];
-                        const exercise = chart.data.datasets[point.datasetIndex].label;
-                        const value = chart.data.datasets[point.datasetIndex].data[point.index];
-                        document.getElementById('progressChartInfo').innerText = `${exercise} | ${label} | Volume: ${value} KG`;
+                        legend: { labels: { color: textColor } },
+                        tooltip: { enabled: true }
                     },
                     scales: {
                         x: { ticks: { color: textColor }, grid: { color: gridColor } },

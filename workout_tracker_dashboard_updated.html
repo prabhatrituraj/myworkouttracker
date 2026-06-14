@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Workout Tracker Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg: #f5f5f5;
+            --card: #ffffff;
+            --text: #1f2937;
+            --muted: #6b7280;
+            --border: #e5e7eb;
+            --accent: #2563eb;
+            --accent-2: #10b981;
+            --danger: #ef4444;
+            --table-head: #111827;
+            --table-head-text: #ffffff;
+            --input-bg: #ffffff;
+            --input-text: #111827;
+            --shadow: 0 10px 25px rgba(0,0,0,0.08);
+            --overlay: rgba(0,0,0,0.45);
+        }
+
+        body.dark {
+            --bg: #0f172a;
+            --card: #111827;
+            --text: #e5e7eb;
+            --muted: #9ca3af;
+            --border: #374151;
+            --accent: #60a5fa;
+            --accent-2: #34d399;
+            --danger: #f87171;
+            --table-head: #1f2937;
+            --table-head-text: #f9fafb;
+            --input-bg: #0b1220;
+            --input-text: #e5e7eb;
+            --shadow: 0 10px 25px rgba(0,0,0,0.28);
+            --overlay: rgba(0,0,0,0.65);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            max-width: 1200px;
+            margin: auto;
+            padding: 20px;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        h1, h2 { text-align: center; margin-top: 0; }
+
+        .topbar {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 10px;
+        }
+
+        .theme-toggle {
+            background: var(--card);
+            color: var(--text);
+            border: 1px solid var(--border);
+            padding: 10px 14px;
+            border-radius: 999px;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+        }
+
+        .card {
+            background: var(--card);
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 14px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+        }
+
+        input, select, button, textarea {
+            padding: 10px 12px;
+            margin: 5px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--input-bg);
+            color: var(--input-text);
+        }
+
+        button {
+            cursor: pointer;
+            background: var(--accent);
+            color: white;
+            border: none;
+        }
+
+        button.secondary { background: #6b7280; }
+        button.danger { background: var(--danger); }
+
+        .stats {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .stat-box {
+            flex: 1;
+            min-width: 180px;
+            background: rgba(127,127,127,0.08);
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+
+        .stat-box h3 {
+            margin: 0 0 8px;
+            font-size: 28px;
+        }
+
+        .exercise-row {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 12px;
+            background: rgba(127,127,127,0.04);
+        }
+
+        .exercise-top {
+            display: grid;
+            grid-template-columns: 1.2fr 1.4fr auto auto;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .sets-container {
+            display: grid;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .set-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .chart-wrap {
+            background: rgba(127,127,127,0.06);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+            min-height: 340px;
+        }
+
+        .chart-wrap h3 { margin: 0 0 12px; text-align: center; }
+        canvas { width: 100% !important; max-height: 260px; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            overflow-x: auto;
+        }
+
+        th, td {
+            border: 1px solid var(--border);
+            padding: 8px;
+            text-align: center;
+            vertical-align: top;
+        }
+
+        th {
+            background: var(--table-head);
+            color: var(--table-head-text);
+        }
+
+        .improved { color: var(--accent-2); font-weight: bold; }
+        .not-improved { color: var(--danger); }
+        .helper-text { color: var(--muted); font-size: 0.95rem; margin-top: 6px; }
+
+        .import-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .action-btn {
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: var(--overlay);
+            z-index: 999;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal.show { display: flex; }
+
+        .modal-content {
+            width: min(100%, 420px);
+            background: var(--card);
+            color: var(--text);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            padding: 20px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            margin-top: 12px;
+        }
+
+        @media (max-width: 900px) {
+            .charts-grid { grid-template-columns: 1fr; }
+            .exercise-top { grid-template-columns: 1fr 1fr; }
+            .set-row { grid-template-columns: 1fr 1fr; }
+            .set-row button { grid-column: span 2; }
+            .exercise-top button { grid-column: span 2; }
+        }
+
+        @media (max-width: 768px) {
+            table { display: block; overflow-x: auto; }
+            .stats { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="topbar">
+        <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()">🌙 Dark mode</button>
+    </div>
+
+    <h1>🏋️ Workout Tracker Dashboard</h1>
+
+    <div class="card">
+        <h2>Dashboard</h2>
+        <div class="stats">
+            <div class="stat-box">
+                <h3 id="totalWorkouts">0</h3>
+                <p>Total Exercises Logged</p>
+            </div>
+            <div class="stat-box">
+                <h3 id="totalVolume">0 KG</h3>
+                <p>Total Volume</p>
+            </div>
+            <div class="stat-box">
+                <h3 id="mostTrained">-</h3>
+                <p>Most Trained Body Part</p>
+            </div>
+        </div>
+
+        <div class="charts-grid" style="margin-top: 18px;">
+            <div class="chart-wrap">
+                <h3>Volume Over Time</h3>
+                <canvas id="volumeChart"></canvas>
+                <div id="volumeChartInfo" class="helper-text">Click a point on the chart to see details.</div>
+            </div>
+            <div class="chart-wrap">
+                <h3>Exercise Progress</h3>
+                <canvas id="progressChart"></canvas>
+                <div id="progressChartInfo" class="helper-text">Click a line point or legend item to explore different exercises.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Log Workout</h2>
+
+        <label for="date">Date:</label>
+        <input type="date" id="date" />
+        <button class="secondary" onclick="setToday()">Today</button>
+
+        <div id="exerciseContainer"></div>
+
+        <button onclick="addExercise()">+ Add Exercise</button>
+        <button onclick="saveWorkout()">Save Workout</button>
+        <div class="helper-text">Each exercise can contain multiple sets. Add or remove set rows inside the exercise block.</div>
+    </div>
+
+    <div class="card">
+        <h2>Workout History</h2>
+
+        <input type="text" id="search" placeholder="Search Exercise" onkeyup="renderHistory()" />
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Body Part</th>
+                    <th>Exercise</th>
+                    <th>Sets</th>
+                    <th>Set Details</th>
+                    <th>Total Volume</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="historyTable"></tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>Import CSV</h2>
+        <div class="import-row">
+            <input type="file" id="csvFile" accept=".csv" />
+            <button onclick="importCSV()">Import CSV</button>
+        </div>
+        <div class="helper-text">
+            Supported columns: <strong>date, bodyPart, exercise, reps, weight</strong> for one row per set; or <strong>date, bodyPart, exercise, sets, reps, weight</strong> for one row per exercise.
+        </div>
+    </div>
+
+    <div id="dateModal" class="modal" aria-hidden="true">
+        <div class="modal-content">
+            <h3>Edit Workout Date</h3>
+            <p class="helper-text">Choose any past or future date.</p>
+            <input type="date" id="editDateInput" />
+            <div class="modal-actions">
+                <button class="secondary" onclick="closeDateEditor()">Cancel</button>
+                <button onclick="saveEditedDate()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const exerciseLibrary = {
+            Chest: [
+                "Barbell Bench Press", "Dumbbell Bench Press", "Incline Barbell Bench Press", "Incline Dumbbell Press",
+                "Decline Bench Press", "Machine Chest Press", "Smith Machine Bench Press", "Dumbbell Fly",
+                "Cable Fly", "Pec Deck Fly", "Push Up", "Weighted Push Up", "Chest Dips", "Close Grip Bench Press"
+            ],
+            Back: [
+                "Deadlift", "Romanian Deadlift", "Barbell Row", "Pendlay Row", "Bent Over Dumbbell Row",
+                "Single Arm Dumbbell Row", "Seated Cable Row", "Chest Supported Row", "Lat Pulldown",
+                "Wide Grip Lat Pulldown", "Close Grip Lat Pulldown", "Pull Up", "Chin Up", "Assisted Pull Up",
+                "T-Bar Row", "Machine Row", "Straight Arm Pulldown", "Face Pull", "Back Extension"
+            ],
+            Shoulders: [
+                "Overhead Press", "Barbell Shoulder Press", "Dumbbell Shoulder Press", "Seated Dumbbell Press",
+                "Arnold Press", "Lateral Raise", "Dumbbell Lateral Raise", "Cable Lateral Raise",
+                "Rear Delt Fly", "Reverse Pec Deck", "Upright Row", "Front Raise", "Landmine Press",
+                "Machine Shoulder Press", "Face Pull"
+            ],
+            Legs: [
+                "Back Squat", "Front Squat", "Goblet Squat", "Hack Squat", "Smith Machine Squat", "Leg Press",
+                "Leg Extension", "Leg Curl", "Seated Leg Curl", "Lying Leg Curl", "Romanian Deadlift",
+                "Stiff Leg Deadlift", "Walking Lunge", "Bulgarian Split Squat", "Leg Press Calf Raise",
+                "Standing Calf Raise", "Seated Calf Raise", "Hip Thrust", "Glute Bridge", "Step Up", "Sumo Squat"
+            ],
+            Arms: [
+                "Barbell Curl", "EZ Bar Curl", "Dumbbell Curl", "Incline Dumbbell Curl", "Hammer Curl",
+                "Preacher Curl", "Cable Curl", "Concentration Curl", "Reverse Curl", "Chin Up",
+                "Close Grip Bench Press", "Tricep Pushdown", "Rope Pushdown", "Overhead Tricep Extension",
+                "Skull Crusher", "Dumbbell Overhead Extension", "Cable Overhead Extension", "Bench Dips", "Diamond Push Up"
+            ],
+            Abs: [
+                "Crunch", "Cable Crunch", "Reverse Crunch", "Leg Raise", "Hanging Leg Raise", "Weighted Leg Raise",
+                "Plank", "Side Plank", "Russian Twist", "Bicycle Crunch", "Ab Wheel Rollout", "Mountain Climber",
+                "Decline Sit Up", "Toe Touch", "V-Up"
+            ],
+            FullBody: [
+                "Burpee", "Thruster", "Clean and Press", "Snatch", "Clean", "Push Press", "Kettlebell Swing",
+                "Farmer Carry", "Sled Push", "Battle Rope", "Bear Crawl", "Turkish Get Up"
+            ],
+            Cardio: [
+                "Treadmill Walk", "Treadmill Run", "Cycling", "Rowing", "Elliptical", "Stair Climber",
+                "Jump Rope", "Ski Erg", "Outdoor Walk", "Outdoor Run", "Sprint Intervals"
+            ]
+        };
+
+        let workouts = normalizeWorkouts(JSON.parse(localStorage.getItem("workouts")) || []);
+        let isDarkMode = JSON.parse(localStorage.getItem("darkMode")) || false;
+        let volumeChart = null;
+        let progressChart = null;
+        let editingWorkoutIndex = null;
+        let selectedExercisesInProgressChart = new Set();
+
+        document.getElementById("date").value = new Date().toISOString().split("T")[0];
+        applyTheme();
+
+        function normalizeWorkouts(arr) {
+            return arr.map(w => {
+                if (Array.isArray(w.sets)) return w;
+                if (typeof w.sets === "number") {
+                    return {
+                        ...w,
+                        sets: [{ reps: Number(w.reps) || 0, weight: Number(w.weight) || 0 }]
+                    };
+                }
+                return { ...w, sets: [] };
+            });
+        }
+
+        function setToday() {
+            document.getElementById("date").value = new Date().toISOString().split("T")[0];
+        }
+
+        function toggleTheme() {
+            isDarkMode = !isDarkMode;
+            localStorage.setItem("darkMode", JSON.stringify(isDarkMode));
+            applyTheme();
+        }
+
+        function applyTheme() {
+            document.body.classList.toggle("dark", isDarkMode);
+            document.getElementById("themeToggle").textContent = isDarkMode ? "☀️ Light mode" : "🌙 Dark mode";
+            updateCharts();
+        }
+
+        function addExercise() {
+            const div = document.createElement("div");
+            div.className = "exercise-row";
+
+            const bodyPartOptions = Object.keys(exerciseLibrary)
+                .map(bp => `<option value="${bp}">${bp}</option>`)
+                .join("");
+
+            div.innerHTML = `
+                <div class="exercise-top">
+                    <select class="bodypart" onchange="updateExercises(this)">
+                        <option value="">Body Part</option>
+                        ${bodyPartOptions}
+                    </select>
+
+                    <select class="exercise">
+                        <option value="">Exercise</option>
+                    </select>
+
+                    <button class="secondary" onclick="addSetRow(this)">+ Add Set</button>
+                    <button class="danger" onclick="this.closest('.exercise-row').remove()">Remove Exercise</button>
+                </div>
+
+                <div class="sets-container">
+                    ${buildSetRow()}
+                </div>
+            `;
+
+            document.getElementById("exerciseContainer").appendChild(div);
+        }
+
+        function buildSetRow() {
+            return `
+                <div class="set-row">
+                    <input type="number" class="reps" placeholder="Reps" min="1" />
+                    <input type="number" class="weight" placeholder="Weight KG" min="0" step="0.5" />
+                    <button class="danger" onclick="this.closest('.set-row').remove()">Remove Set</button>
+                </div>
+            `;
+        }
+
+        function addSetRow(button) {
+            const container = button.closest('.exercise-row').querySelector('.sets-container');
+            container.insertAdjacentHTML('beforeend', buildSetRow());
+        }
+
+        function updateExercises(select) {
+            const bodyPart = select.value;
+            const exerciseSelect = select.parentElement.querySelector(".exercise");
+
+            if (!bodyPart) {
+                exerciseSelect.innerHTML = '<option value="">Exercise</option>';
+                return;
+            }
+
+            exerciseSelect.innerHTML = `
+                <option value="">Exercise</option>
+                ${exerciseLibrary[bodyPart].map(e => `<option value="${e}">${e}</option>`).join("")}
+            `;
+        }
+
+        function getExerciseVolume(entry) {
+            return entry.sets.reduce((sum, s) => sum + (Number(s.reps) || 0) * (Number(s.weight) || 0), 0);
+        }
+
+        function getEntrySetCount(entry) {
+            return Array.isArray(entry.sets) ? entry.sets.length : 0;
+        }
+
+        function getSetDetails(entry) {
+            return entry.sets.map((s, i) => `${i + 1}) ${s.reps} reps @ ${s.weight} KG`).join('<br>');
+        }
+
+        function saveWorkout() {
+            const date = document.getElementById("date").value;
+            const rows = document.querySelectorAll(".exercise-row");
+            let saved = 0;
+
+            rows.forEach(row => {
+                const bodyPart = row.querySelector(".bodypart").value;
+                const exercise = row.querySelector(".exercise").value;
+                const setRows = row.querySelectorAll(".set-row");
+                const sets = [];
+
+                setRows.forEach(setRow => {
+                    const reps = Number(setRow.querySelector(".reps").value);
+                    const weight = Number(setRow.querySelector(".weight").value);
+                    if (reps > 0 && weight >= 0) sets.push({ reps, weight });
+                });
+
+                if (bodyPart && exercise && sets.length > 0) {
+                    workouts.push({ date, bodyPart, exercise, sets });
+                    saved += 1;
+                }
+            });
+
+            localStorage.setItem("workouts", JSON.stringify(workouts));
+
+            if (saved === 0) {
+                alert("Please fill at least one complete exercise row with one or more sets.");
+                return;
+            }
+
+            alert("Workout Saved!");
+            document.getElementById("exerciseContainer").innerHTML = "";
+            addExercise();
+            updateDashboard();
+            renderHistory();
+            updateCharts();
+        }
+
+        function updateDashboard() {
+            document.getElementById("totalWorkouts").innerText = workouts.length;
+
+            let totalVolume = 0;
+            let bodyCount = {};
+
+            workouts.forEach(w => {
+                totalVolume += getExerciseVolume(w);
+                bodyCount[w.bodyPart] = (bodyCount[w.bodyPart] || 0) + 1;
+            });
+
+            document.getElementById("totalVolume").innerText = totalVolume.toLocaleString() + " KG";
+
+            let most = "-";
+            let max = 0;
+            for (let bp in bodyCount) {
+                if (bodyCount[bp] > max) {
+                    max = bodyCount[bp];
+                    most = bp;
+                }
+            }
+            document.getElementById("mostTrained").innerText = most;
+        }
+
+        function renderHistory() {
+            const search = document.getElementById("search").value.toLowerCase();
+            const table = document.getElementById("historyTable");
+            table.innerHTML = "";
+
+            workouts
+                .filter(w => w.exercise.toLowerCase().includes(search))
+                .sort((a, b) => new Date(b.date) - new Date(a.date))
+                .forEach((w, index) => {
+                    const volume = getExerciseVolume(w);
+                    table.innerHTML += `
+                        <tr>
+                            <td>${w.date}</td>
+                            <td>${w.bodyPart}</td>
+                            <td>${w.exercise}</td>
+                            <td>${getEntrySetCount(w)}</td>
+                            <td>${getSetDetails(w)}</td>
+                            <td>${volume}</td>
+                            <td>
+                                <button class="action-btn secondary" onclick="openDateEditor(${index})">Change Date</button>
+                                <button class="action-btn danger" onclick="removeWorkout(${index})">Remove</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+        }
+
+        function removeWorkout(index) {
+            const item = workouts[index];
+            const ok = confirm(`Remove ${item.exercise} on ${item.date}?`);
+            if (!ok) return;
+
+            workouts.splice(index, 1);
+            localStorage.setItem('workouts', JSON.stringify(workouts));
+            updateDashboard();
+            renderHistory();
+            updateCharts();
+        }
+
+        function openDateEditor(index) {
+            editingWorkoutIndex = index;
+            const modal = document.getElementById('dateModal');
+            const input = document.getElementById('editDateInput');
+            input.value = workouts[index].date;
+            modal.classList.add('show');
+            modal.setAttribute('aria-hidden', 'false');
+            setTimeout(() => {
+                if (input.showPicker) input.showPicker();
+                else input.focus();
+            }, 50);
+        }
+
+        function closeDateEditor() {
+            editingWorkoutIndex = null;
+            const modal = document.getElementById('dateModal');
+            modal.classList.remove('show');
+            modal.setAttribute('aria-hidden', 'true');
+        }
+
+        function saveEditedDate() {
+            const input = document.getElementById('editDateInput');
+            const newDate = input.value;
+            if (!newDate) {
+                alert('Please choose a date.');
+                return;
+            }
+
+            if (editingWorkoutIndex === null || workouts[editingWorkoutIndex] === undefined) {
+                closeDateEditor();
+                return;
+            }
+
+            workouts[editingWorkoutIndex].date = newDate;
+            localStorage.setItem('workouts', JSON.stringify(workouts));
+            closeDateEditor();
+            updateDashboard();
+            renderHistory();
+            updateCharts();
+        }
+
+        function getUniqueDatesSorted() {
+            return [...new Set(workouts.map(w => w.date))].sort((a, b) => new Date(a) - new Date(b));
+        }
+
+        function buildVolumeByDate() {
+            const dates = getUniqueDatesSorted();
+            return dates.map(date => {
+                return workouts
+                    .filter(w => w.date === date)
+                    .reduce((sum, w) => sum + getExerciseVolume(w), 0);
+            });
+        }
+
+        function getExercisesForProgressChart() {
+            const uniqueExercises = [...new Set(workouts.map(w => w.exercise))].sort();
+            if (selectedExercisesInProgressChart.size === 0) {
+                uniqueExercises.slice(0, 6).forEach(e => selectedExercisesInProgressChart.add(e));
+            }
+            return uniqueExercises;
+        }
+
+        function buildExerciseSeries() {
+            const dates = getUniqueDatesSorted();
+            const exercises = getExercisesForProgressChart();
+
+            return exercises.map((exercise, idx) => ({
+                label: exercise,
+                data: dates.map(date => {
+                    return workouts
+                        .filter(w => w.exercise === exercise && w.date === date)
+                        .reduce((sum, w) => sum + getExerciseVolume(w), 0);
+                }),
+                borderWidth: 2,
+                tension: 0.35,
+                pointRadius: 3,
+                fill: false
+            }));
+        }
+
+        function updateCharts() {
+            const volumeCtx = document.getElementById("volumeChart").getContext("2d");
+            const progressCtx = document.getElementById("progressChart").getContext("2d");
+
+            const textColor = getComputedStyle(document.body).getPropertyValue("--text").trim();
+            const gridColor = getComputedStyle(document.body).getPropertyValue("--border").trim();
+            const accent = getComputedStyle(document.body).getPropertyValue("--accent").trim();
+            const accent2 = getComputedStyle(document.body).getPropertyValue("--accent-2").trim();
+
+            const dates = getUniqueDatesSorted();
+            const volumeData = buildVolumeByDate();
+            const exerciseDatasets = buildExerciseSeries();
+
+            if (volumeChart) volumeChart.destroy();
+            if (progressChart) progressChart.destroy();
+
+            volumeChart = new Chart(volumeCtx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Total Volume',
+                        data: volumeData,
+                        borderWidth: 2,
+                        tension: 0.35,
+                        pointRadius: 4,
+                        fill: false,
+                        borderColor: accent
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'nearest', intersect: true },
+                    plugins: {
+                        legend: { labels: { color: textColor } },
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: function(context) {
+                                    return `Click to inspect: ${context.label}`;
+                                }
+                            }
+                        }
+                    },
+                    onClick: (event, elements, chart) => {
+                        if (!elements.length) return;
+                        const point = elements[0];
+                        const label = chart.data.labels[point.index];
+                        const value = chart.data.datasets[point.datasetIndex].data[point.index];
+                        document.getElementById('volumeChartInfo').innerText = `Date: ${label} | Total Volume: ${value} KG`;
+                    },
+                    scales: {
+                        x: { ticks: { color: textColor }, grid: { color: gridColor } },
+                        y: { ticks: { color: textColor }, grid: { color: gridColor } }
+                    }
+                }
+            });
+
+            progressChart = new Chart(progressCtx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: exerciseDatasets.map((d, i) => ({
+                        ...d,
+                        borderColor: i % 2 === 0 ? accent2 : accent
+                    }))
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'nearest', intersect: false },
+                    plugins: {
+                        legend: {
+                            labels: { color: textColor },
+                            onClick: (e, legendItem, legend) => {
+                                const index = legendItem.datasetIndex;
+                                const meta = legend.chart.getDatasetMeta(index);
+                                meta.hidden = meta.hidden === null ? !legend.chart.data.datasets[index].hidden : null;
+                                legend.chart.update();
+
+                                const name = legend.chart.data.datasets[index].label;
+                                const info = document.getElementById('progressChartInfo');
+                                info.innerText = `Toggled: ${name}`;
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: function(context) {
+                                    return 'Click legend items to hide/show series.';
+                                }
+                            }
+                        }
+                    },
+                    onClick: (event, elements, chart) => {
+                        if (!elements.length) return;
+                        const point = elements[0];
+                        const label = chart.data.labels[point.index];
+                        const exercise = chart.data.datasets[point.datasetIndex].label;
+                        const value = chart.data.datasets[point.datasetIndex].data[point.index];
+                        document.getElementById('progressChartInfo').innerText = `${exercise} | ${label} | Volume: ${value} KG`;
+                    },
+                    scales: {
+                        x: { ticks: { color: textColor }, grid: { color: gridColor } },
+                        y: { ticks: { color: textColor }, grid: { color: gridColor } }
+                    }
+                }
+            });
+        }
+
+        function parseCSV(text) {
+            const rows = [];
+            let row = [];
+            let cur = '';
+            let inQuotes = false;
+
+            for (let i = 0; i < text.length; i++) {
+                const ch = text[i];
+                const next = text[i + 1];
+
+                if (ch === '"' && inQuotes && next === '"') {
+                    cur += '"';
+                    i++;
+                } else if (ch === '"') {
+                    inQuotes = !inQuotes;
+                } else if (ch === ',' && !inQuotes) {
+                    row.push(cur.trim());
+                    cur = '';
+                } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
+                    if (cur.length || row.length) {
+                        row.push(cur.trim());
+                        rows.push(row);
+                        row = [];
+                        cur = '';
+                    }
+                    if (ch === '\r' && next === '\n') i++;
+                } else {
+                    cur += ch;
+                }
+            }
+
+            if (cur.length || row.length) {
+                row.push(cur.trim());
+                rows.push(row);
+            }
+
+            return rows.filter(r => r.some(cell => cell !== ''));
+        }
+
+        function importCSV() {
+            const fileInput = document.getElementById('csvFile');
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Please choose a CSV file first.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const text = e.target.result;
+                    const rows = parseCSV(text);
+                    if (rows.length < 2) {
+                        alert('CSV looks empty or invalid.');
+                        return;
+                    }
+
+                    const headers = rows[0].map(h => h.toLowerCase());
+                    const dataRows = rows.slice(1);
+                    const getIndex = (...names) => headers.findIndex(h => names.includes(h.trim().toLowerCase()));
+
+                    const dateIdx = getIndex('date');
+                    const bodyIdx = getIndex('bodypart', 'body part');
+                    const exerciseIdx = getIndex('exercise');
+                    const repsIdx = getIndex('reps');
+                    const weightIdx = getIndex('weight', 'weightkg', 'weight kg');
+                    const setsIdx = getIndex('sets');
+
+                    if (dateIdx === -1 || bodyIdx === -1 || exerciseIdx === -1 || repsIdx === -1 || weightIdx === -1) {
+                        alert('CSV must include at least: date, bodyPart, exercise, reps, weight');
+                        return;
+                    }
+
+                    const grouped = new Map();
+
+                    dataRows.forEach(cols => {
+                        const date = (cols[dateIdx] || '').trim();
+                        const bodyPart = (cols[bodyIdx] || '').trim();
+                        const exercise = (cols[exerciseIdx] || '').trim();
+                        const reps = Number(cols[repsIdx]);
+                        const weight = Number(cols[weightIdx]);
+                        const sets = Number(setsIdx >= 0 ? cols[setsIdx] : 1) || 1;
+
+                        if (!date || !bodyPart || !exercise || !reps || weight < 0) return;
+
+                        const key = `${date}__${bodyPart}__${exercise}`;
+                        if (!grouped.has(key)) {
+                            grouped.set(key, { date, bodyPart, exercise, sets: [] });
+                        }
+
+                        const entry = grouped.get(key);
+
+                        if (setsIdx >= 0 && sets > 1) {
+                            for (let i = 0; i < sets; i++) {
+                                entry.sets.push({ reps, weight });
+                            }
+                        } else {
+                            entry.sets.push({ reps, weight });
+                        }
+                    });
+
+                    const imported = [...grouped.values()].filter(x => x.sets.length > 0);
+                    if (!imported.length) {
+                        alert('No valid workout rows found in the CSV.');
+                        return;
+                    }
+
+                    workouts = workouts.concat(imported);
+                    localStorage.setItem('workouts', JSON.stringify(workouts));
+
+                    fileInput.value = '';
+                    updateDashboard();
+                    renderHistory();
+                    updateCharts();
+                    alert(`Imported ${imported.length} workout entries from CSV.`);
+                } catch (err) {
+                    alert('Could not read the CSV file. Please check the format.');
+                }
+            };
+
+            reader.readAsText(file);
+        }
+
+        addExercise();
+        updateDashboard();
+        renderHistory();
+        updateCharts();
+    </script>
+</body>
+</html>
